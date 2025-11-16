@@ -1,0 +1,112 @@
+<div class="resources-container">
+  <p-card>
+    <ng-template pTemplate="header">
+      <div class="card-header">
+        <div class="header-content">
+          <div>
+            <h1>OData Resources</h1>
+            <p class="connection-info">{{ connectionUrl }}</p>
+          </div>
+          <p-button
+            label="Disconnect"
+            icon="pi pi-sign-out"
+            severity="secondary"
+            (onClick)="disconnect()"
+          ></p-button>
+        </div>
+      </div>
+    </ng-template>
+
+    <p-message
+      *ngIf="errorMessage"
+      severity="error"
+      [text]="errorMessage"
+      styleClass="w-full mb-3"
+    ></p-message>
+
+    <div *ngIf="loading" class="loading-container">
+      <p-progressSpinner></p-progressSpinner>
+      <p>Loading resources...</p>
+    </div>
+
+    <div *ngIf="!loading && resources.length === 0 && !errorMessage" class="empty-state">
+      <i class="pi pi-inbox" style="font-size: 3rem; color: var(--text-color-secondary);"></i>
+      <p>No resources found</p>
+    </div>
+
+    <div
+      *ngIf="!loading && resources.length > 0"
+      class="search-bar"
+    >
+      <span class="p-input-icon-left">
+        <i class="pi pi-search"></i>
+        <input
+          pInputText
+          type="text"
+          placeholder="Search by name, kind, or URL"
+          [(ngModel)]="searchTerm"
+          (ngModelChange)="onSearchTermChange()"
+        />
+      </span>
+      <span class="search-summary">
+        Showing {{ filteredResources.length }} of {{ resources.length }} resource(s)
+      </span>
+    </div>
+
+    <p-table
+      *ngIf="!loading && resources.length > 0"
+      [value]="filteredResources"
+      [paginator]="true"
+      [rows]="20"
+      [rowsPerPageOptions]="[10, 20, 50, 100]"
+      styleClass="p-datatable-striped"
+      [tableStyle]="{ 'min-width': '50rem' }"
+    >
+      <ng-template pTemplate="caption">
+        <div class="table-header">
+          <span class="resource-count">Found {{ filteredResources.length }} resource(s)</span>
+        </div>
+      </ng-template>
+
+      <ng-template pTemplate="header">
+        <tr>
+          <th style="width: 40%">Name</th>
+          <th style="width: 20%">Kind</th>
+          <th style="width: 40%">URL</th>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="body" let-resource>
+        <tr>
+          <td>
+            <strong>{{ resource.name }}</strong>
+          </td>
+          <td>
+            <p-tag [value]="resource.kind" [severity]="getSeverity(resource.kind)"></p-tag>
+          </td>
+          <td>
+            <div class="url-cell">
+              <span class="url-text">{{ resource.url }}</span>
+              <p-button
+                icon="pi pi-database"
+                label="View data"
+                [text]="true"
+                severity="secondary"
+                [rounded]="true"
+                (onClick)="openResource(resource)"
+                pTooltip="View resource data"
+              ></p-button>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="3">No resources found</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>
+

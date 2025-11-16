@@ -1,0 +1,77 @@
+<div class="login-container">
+  <p-card class="login-card">
+    <ng-template pTemplate="header">
+      <div class="card-header">
+        <h1>OData Viewer</h1>
+        <p>Connect to your OData endpoint</p>
+      </div>
+    </ng-template>
+
+    <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
+      <div class="form-group">
+        <label for="odataUrl">OData URL</label>
+        <input
+          id="odataUrl"
+          type="text"
+          pInputText
+          [(ngModel)]="odataUrl"
+          name="odataUrl"
+          placeholder="https://your-odata-service.com/odata/v2"
+          required
+          [disabled]="loading"
+          class="w-full"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input
+          id="username"
+          type="text"
+          pInputText
+          [(ngModel)]="username"
+          name="username"
+          placeholder="Enter username"
+          required
+          [disabled]="loading"
+          class="w-full"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <p-password
+          id="password"
+          [(ngModel)]="password"
+          name="password"
+          placeholder="Enter password"
+          [feedback]="false"
+          [toggleMask]="true"
+          required
+          [disabled]="loading"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        ></p-password>
+      </div>
+
+      <p-message
+        *ngIf="errorMessage"
+        severity="error"
+        [text]="errorMessage"
+        styleClass="w-full mb-3"
+      ></p-message>
+
+      <div class="button-group">
+        <p-button
+          type="submit"
+          label="Connect"
+          icon="pi pi-sign-in"
+          [loading]="loading"
+          [disabled]="loading || !odataUrl || !username || !password"
+          styleClass="w-full"
+        ></p-button>
+      </div>
+    </form>
+  </p-card>
+</div>
+

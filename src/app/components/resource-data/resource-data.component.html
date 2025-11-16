@@ -1,0 +1,70 @@
+<div class="resource-data-container">
+  <p-card>
+    <ng-template pTemplate="header">
+      <div class="card-header">
+        <div class="header-info">
+          <h1>{{ resourceName }}</h1>
+          <p class="connection-url">{{ connectionUrl }}</p>
+        </div>
+        <p-button
+          label="Back to resources"
+          icon="pi pi-arrow-left"
+          severity="secondary"
+          (onClick)="backToResources()"
+        ></p-button>
+      </div>
+    </ng-template>
+
+    <p-message
+      *ngIf="errorMessage"
+      severity="error"
+      [text]="errorMessage"
+      styleClass="w-full mb-3"
+    ></p-message>
+
+    <div *ngIf="loading" class="loading-container">
+      <p-progressSpinner></p-progressSpinner>
+      <p>Loading data...</p>
+    </div>
+
+    <div *ngIf="!loading && rows.length === 0 && !errorMessage" class="empty-state">
+      <i class="pi pi-database"></i>
+      <p>No data available for this resource</p>
+    </div>
+
+    <p-table
+      *ngIf="!loading && rows.length > 0"
+      [value]="rows"
+      [paginator]="true"
+      [rows]="25"
+      [rowsPerPageOptions]="[10, 25, 50, 100]"
+      [responsiveLayout]="'scroll'"
+      class="resource-data-table"
+    >
+      <ng-template pTemplate="header">
+        <tr>
+          <th *ngFor="let column of columns; trackBy: trackColumn">
+            {{ column }}
+          </th>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="body" let-row>
+        <tr>
+          <td *ngFor="let column of columns; trackBy: trackColumn">
+            {{ formatValue(row[column]) }}
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td [attr.colspan]="columns.length || 1">
+            No records found
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>
+
