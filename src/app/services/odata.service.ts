@@ -15,6 +15,20 @@ export interface ODataResource {
   url: string;
 }
 
+export type CountStrategy = 'count' | 'inlinecount';
+
+export interface ResourceDataRequestOptions {
+  skip?: number;
+  top?: number;
+  includeCount?: boolean;
+  countStrategy?: CountStrategy;
+}
+
+export interface ResourceDataResult {
+  data: any[];
+  total: number | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -211,37 +225,93 @@ export class ODataService {
     );
   }
 
-  getResourceData(resourceName: string): Observable<any[]> {
+  getResourceData(resourceName: string, options: ResourceDataRequestOptions = {}): Observable<ResourceDataResult> {
     if (!this.connection) {
       return throwError(() => new Error('No connection configured'));
     }
 
     const normalizedName = resourceName.replace(/^\//, '');
     const baseUrl = `${this.connection.url}/${normalizedName}`;
-    const urlWithFormat = baseUrl.includes('?') ? `${baseUrl}&$format=json` : `${baseUrl}?$format=json`;
+    const queryParts: string[] = ['$format=json'];
+    const countStrategy: CountStrategy = options.countStrategy ?? 'inlinecount';
+
+    if (typeof options.top === 'number' && options.top > 0) {
+      queryParts.push(`$top=${options.top}`);
+    }
+
+    if (typeof options.skip === 'number' && options.skip > 0) {
+      queryParts.push(`$skip=${options.skip}`);
+    }
+
+    if (options.includeCount) {
+      if (countStrategy === 'inlinecount') {
+        queryParts.push(`$inlinecount=allpages`);
+      } else {
+        queryParts.push(`$count=true`);
+      }
+    }
+
+    const urlWithFormat = queryParts.length > 0
+      ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${queryParts.join('&')}`
+      : baseUrl;
 
     return this.http.get(urlWithFormat, {
       headers: this.getAuthHeaders({ 'Accept': 'application/json' })
     }).pipe(
       map((response: any) => {
-        if (response?.value && Array.isArray(response.value)) {
-          return response.value;
-        }
-
-        if (response?.d?.results && Array.isArray(response.d.results)) {
-          return response.d.results;
-        }
-
-        if (Array.isArray(response)) {
-          return response;
-        }
-
-        return response ? [response] : [];
+        const data = this.extractDataArray(response);
+        const total = this.extractTotalCount(response);
+        return {
+          data,
+          total
+        };
       }),
       catchError((error: HttpErrorResponse) => {
         return throwError(() => new Error(`Failed to fetch data for ${resourceName}: ${error.message}`));
       })
     );
+  }
+
+  private extractDataArray(response: any): any[] {
+    if (response?.value && Array.isArray(response.value)) {
+      return response.value;
+    }
+
+    if (response?.d?.results && Array.isArray(response.d.results)) {
+      return response.d.results;
+    }
+
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    return response ? [response] : [];
+  }
+
+  private extractTotalCount(response: any): number | null {
+    if (!response) {
+      return null;
+    }
+
+    const possibleCounts = [
+      response['@odata.count'],
+      response['odata.count'],
+      response['count'],
+      response?.d?.__count
+    ];
+
+    for (const candidate of possibleCounts) {
+      if (candidate === undefined || candidate === null) {
+        continue;
+      }
+
+      const parsed = typeof candidate === 'string' ? Number(candidate) : candidate;
+      if (typeof parsed === 'number' && !Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+
+    return null;
   }
 }
 
