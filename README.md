@@ -20,7 +20,8 @@ npm install
 
 1. Start the dev server (see below).
 2. In the login screen, enter the target service URL plus basic-auth credentials.
-3. After authentication, the Resources page lists all available entity sets/function imports parsed from the service document/metadata.
+3. (Optional) Enable **Remember me** to securely store the last-used credentials in `localStorage` for instant auto-login the next time you visit.
+4. After authentication, the Resources page lists all available entity sets/function imports parsed from the service document/metadata.
 
 ### Development Server
 
@@ -33,10 +34,13 @@ Open `http://localhost:4200/`. The app hot-reloads on source changes.
 ### Key Features
 
 - **Connection management:** store the most recent OData URL + credentials during the session.
+- **Remember me:** opt-in checkbox on the login view persists credentials locally and automatically reconnects on the next visit.
 - **Resource explorer:** lists entity sets, function imports, and entity types discovered from `$metadata` or the service document.
 - **Lazy data tables:** server-driven pagination that keeps large datasets responsive; includes retry logic for `$count` vs `$inlinecount`.
 - **Column tooling:** each column supports sorting, filtering, and type-aware operators (numeric, boolean, date, string).
-- **Metadata modal:** a “Show Metadata” action per row displays the original `__metadata` payload.
+- **Column options dialog:** a dedicated “Columns Options” button lets you toggle columns individually or select/unselect all at once.
+- **Related resources:** from the resource data view, open the “Related Resources” dialog to inspect navigation targets discovered from `$metadata`.
+- **Metadata modal:** a “Show Metadata” action per row displays the original `__metadata` payload in a readable key/value format.
 - **OData v2 compatibility:** filter strings use `substringof(...) eq true`, and unsupported functions automatically fall back to compliant options.
 
 ## Common Scripts
