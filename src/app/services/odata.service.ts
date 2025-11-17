@@ -16,6 +16,11 @@ export interface ODataResource {
   accessible?: boolean | null;
 }
 
+export interface ODataRelatedResource extends ODataResource {
+  viaProperty: string;
+  targetEntityType?: string;
+}
+
 export type CountStrategy = 'count' | 'inlinecount';
 
 export interface ResourceDataRequestOptions {
@@ -361,6 +366,191 @@ export class ODataService {
 
   private appendQueryParam(url: string, param: string): string {
     return url.includes('?') ? `${url}&${param}` : `${url}?${param}`;
+  }
+
+  getRelatedResources(resourceName: string): Observable<ODataRelatedResource[]> {
+    if (!this.connection) {
+      return throwError(() => new Error('No connection configured'));
+    }
+
+    return this.fetchMetadata().pipe(
+      map((metadataXml) => this.parseRelatedResources(metadataXml, resourceName))
+    );
+  }
+
+  private parseRelatedResources(metadataXml: string, resourceName: string): ODataRelatedResource[] {
+    if (!metadataXml) {
+      return [];
+    }
+
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(metadataXml, 'text/xml');
+
+    const entitySetMap = new Map<string, { entityType?: string | null; resource: ODataResource }>();
+    const entityTypeToResources = new Map<string, ODataResource[]>();
+    let targetEntityType: string | null = null;
+
+    const entitySets = Array.from(xmlDoc.getElementsByTagName('EntitySet'));
+    entitySets.forEach((entitySet) => {
+      const name = entitySet.getAttribute('Name');
+      if (!name) {
+        return;
+      }
+      const entityType = entitySet.getAttribute('EntityType');
+      const resource: ODataResource = {
+        name,
+        kind: 'EntitySet',
+        url: `${this.connection?.url}/${name}`
+      };
+      entitySetMap.set(name, { entityType, resource });
+      if (entityType) {
+        const list = entityTypeToResources.get(entityType) ?? [];
+        list.push(resource);
+        entityTypeToResources.set(entityType, list);
+      }
+      if (name === resourceName) {
+        targetEntityType = entityType ?? null;
+      }
+    });
+
+    if (!targetEntityType) {
+      return [];
+    }
+
+    const entityTypeNode = this.findEntityTypeNode(xmlDoc, targetEntityType);
+    if (!entityTypeNode) {
+      return [];
+    }
+
+    const navProps = Array.from(entityTypeNode.getElementsByTagName('NavigationProperty'));
+    if (navProps.length === 0) {
+      return [];
+    }
+
+    const associationMap = this.buildAssociationMap(xmlDoc);
+    const results: ODataRelatedResource[] = [];
+    const seen = new Set<string>();
+
+    navProps.forEach((navProp) => {
+      const viaProperty = navProp.getAttribute('Name') ?? 'Navigation';
+      const targetType = this.resolveNavigationTargetType(navProp, associationMap);
+      if (!targetType) {
+        return;
+      }
+      const relatedResources = entityTypeToResources.get(targetType);
+      if (relatedResources && relatedResources.length > 0) {
+        relatedResources.forEach((resource) => {
+          const key = `${viaProperty}|${resource.name}`;
+          if (seen.has(key)) {
+            return;
+          }
+          seen.add(key);
+          results.push({
+            ...resource,
+            viaProperty,
+            targetEntityType: targetType
+          });
+        });
+      } else {
+        const fallbackName = targetType.split('.').pop() ?? targetType;
+        const key = `${viaProperty}|${fallbackName}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        results.push({
+          name: fallbackName,
+          kind: 'EntityType',
+          url: `${this.connection?.url}/${fallbackName}`,
+          viaProperty,
+          targetEntityType: targetType
+        });
+      }
+    });
+
+    return results;
+  }
+
+  private findEntityTypeNode(xmlDoc: Document, entityTypeFullName: string): Element | null {
+    if (!entityTypeFullName) {
+      return null;
+    }
+    const lastDot = entityTypeFullName.lastIndexOf('.');
+    const typeName = lastDot >= 0 ? entityTypeFullName.slice(lastDot + 1) : entityTypeFullName;
+    const namespace = lastDot >= 0 ? entityTypeFullName.slice(0, lastDot) : '';
+    const entityTypes = Array.from(xmlDoc.getElementsByTagName('EntityType'));
+    for (const node of entityTypes) {
+      if (node.getAttribute('Name') !== typeName) {
+        continue;
+      }
+      const schema = node.parentElement;
+      const schemaNamespace = schema?.getAttribute('Namespace');
+      if (!namespace || schemaNamespace === namespace) {
+        return node;
+      }
+    }
+    return null;
+  }
+
+  private buildAssociationMap(xmlDoc: Document): Map<string, Map<string, string>> {
+    const map = new Map<string, Map<string, string>>();
+    const associations = Array.from(xmlDoc.getElementsByTagName('Association'));
+    associations.forEach((association) => {
+      const associationName = association.getAttribute('Name');
+      if (!associationName) {
+        return;
+      }
+      const schema = association.parentElement;
+      const namespace = schema?.getAttribute('Namespace') ?? '';
+      const keyWithNamespace = namespace ? `${namespace}.${associationName}` : associationName;
+      const roleMap = new Map<string, string>();
+      const ends = Array.from(association.getElementsByTagName('End'));
+      ends.forEach((end) => {
+        const role = end.getAttribute('Role');
+        const type = end.getAttribute('Type');
+        if (role && type) {
+          roleMap.set(role, type);
+        }
+      });
+      map.set(keyWithNamespace, roleMap);
+      if (!map.has(associationName)) {
+        map.set(associationName, roleMap);
+      }
+    });
+    return map;
+  }
+
+  private resolveNavigationTargetType(
+    navProp: Element,
+    associationMap: Map<string, Map<string, string>>
+  ): string | null {
+    const typeAttr = navProp.getAttribute('Type');
+    if (typeAttr) {
+      return this.normalizeEntityTypeName(typeAttr);
+    }
+
+    const relationship = navProp.getAttribute('Relationship');
+    const toRole = navProp.getAttribute('ToRole');
+    if (!relationship || !toRole) {
+      return null;
+    }
+
+    const roleMap = associationMap.get(relationship);
+    const targetType = roleMap?.get(toRole);
+    return targetType ? this.normalizeEntityTypeName(targetType) : null;
+  }
+
+  private normalizeEntityTypeName(typeName: string): string {
+    if (!typeName) {
+      return '';
+    }
+
+    const collectionMatch = /^Collection\((.+)\)$/i.exec(typeName);
+    if (collectionMatch) {
+      return collectionMatch[1];
+    }
+
+    return typeName;
   }
 }
 

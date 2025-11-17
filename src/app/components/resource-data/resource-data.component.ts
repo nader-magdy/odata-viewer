@@ -11,7 +11,7 @@ import { TableModule } from 'primeng/table';
 import type { TableLazyLoadEvent } from 'primeng/table';
 import { Subscription } from 'rxjs';
 import type { FilterMetadata, SortMeta } from 'primeng/api';
-import { ODataService, type CountStrategy } from '../../services/odata.service';
+import { ODataService, type CountStrategy, type ODataRelatedResource } from '../../services/odata.service';
 
 type ColumnValueType = 'string' | 'number' | 'boolean' | 'date' | 'object';
 
@@ -45,6 +45,11 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
   columnTypes: Record<string, ColumnValueType> = {};
   metadataDialogVisible = false;
   selectedMetadata: unknown = null;
+  relatedResourcesDialogVisible = false;
+  relatedResourcesLoading = false;
+  relatedResourcesError = '';
+  relatedResources: ODataRelatedResource[] = [];
+  private relatedResourcesLoadedFor: string | null = null;
 
   private routeSubscription?: Subscription;
 
@@ -130,6 +135,22 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     this.selectedMetadata = null;
   }
 
+  openRelatedResourcesDialog(): void {
+    this.relatedResourcesDialogVisible = true;
+    this.fetchRelatedResources();
+  }
+
+  closeRelatedResourcesDialog(): void {
+    this.relatedResourcesDialogVisible = false;
+  }
+
+  viewRelatedResource(resourceName: string): void {
+    if (!resourceName) {
+      return;
+    }
+    this.router.navigate(['/resources', resourceName]);
+  }
+
   private loadResourceData(resource: string, lazyEvent?: TableLazyLoadEvent, isRetry = false): void {
     const first = lazyEvent?.first ?? 0;
     const resolvedPageSize = lazyEvent?.rows && lazyEvent.rows > 0 ? lazyEvent.rows : this.pageSize;
@@ -204,6 +225,11 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     this.columnTypes = {};
     this.loading = true;
     this.closeMetadataDialog();
+    this.relatedResources = [];
+    this.relatedResourcesError = '';
+    this.relatedResourcesLoading = false;
+    this.relatedResourcesDialogVisible = false;
+    this.relatedResourcesLoadedFor = null;
   }
 
   private buildOrderByClause(event?: TableLazyLoadEvent): string | undefined {
@@ -370,6 +396,31 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     });
 
     this.columnTypes = nextTypes;
+  }
+
+  private fetchRelatedResources(): void {
+    if (!this.resourceName || this.relatedResourcesLoading) {
+      return;
+    }
+
+    if (this.relatedResourcesLoadedFor === this.resourceName && this.relatedResources.length > 0) {
+      return;
+    }
+
+    this.relatedResourcesLoading = true;
+    this.relatedResourcesError = '';
+
+    this.odataService.getRelatedResources(this.resourceName).subscribe({
+      next: (resources) => {
+        this.relatedResources = resources;
+        this.relatedResourcesLoading = false;
+        this.relatedResourcesLoadedFor = this.resourceName;
+      },
+      error: (error: Error) => {
+        this.relatedResourcesError = error.message || 'Failed to load related resources';
+        this.relatedResourcesLoading = false;
+      }
+    });
   }
 
   private detectColumnType(data: any[], column: string): ColumnValueType | null {

@@ -6,12 +6,20 @@
           <h1>{{ resourceName }}</h1>
           <p class="connection-url">{{ connectionUrl }}</p>
         </div>
-        <p-button
-          label="Back to resources"
-          icon="pi pi-arrow-left"
-          severity="secondary"
-          (onClick)="backToResources()"
-        ></p-button>
+        <div class="header-actions">
+          <p-button
+            label="Related Resources"
+            icon="pi pi-share-alt"
+            severity="help"
+            (onClick)="openRelatedResourcesDialog()"
+          ></p-button>
+          <p-button
+            label="Back to resources"
+            icon="pi pi-arrow-left"
+            severity="secondary"
+            (onClick)="backToResources()"
+          ></p-button>
+        </div>
       </div>
     </ng-template>
 
@@ -115,6 +123,48 @@
     <ng-template #noMetadata>
       <p>No metadata available for this record.</p>
     </ng-template>
+  </p-dialog>
+
+  <p-dialog
+    header="Related Resources"
+    [(visible)]="relatedResourcesDialogVisible"
+    [modal]="true"
+    [style]="{ width: '600px' }"
+    [dismissableMask]="true"
+    (onHide)="closeRelatedResourcesDialog()"
+  >
+    <div *ngIf="relatedResourcesLoading" class="related-loading">
+      <p-progressSpinner styleClass="sm-spinner"></p-progressSpinner>
+      <span>Loading related resources...</span>
+    </div>
+
+    <p-message
+      *ngIf="relatedResourcesError"
+      severity="error"
+      [text]="relatedResourcesError"
+      styleClass="w-full mb-3"
+    ></p-message>
+
+    <div *ngIf="!relatedResourcesLoading && !relatedResourcesError">
+      <div *ngIf="relatedResources.length === 0" class="related-empty">
+        <p>No related resources found for {{ resourceName }}.</p>
+      </div>
+      <div *ngFor="let related of relatedResources" class="related-resource-item">
+        <div class="related-info">
+          <strong>{{ related.name }}</strong>
+          <span class="relation-detail">via {{ related.viaProperty }}</span>
+          <span class="relation-detail" *ngIf="related.targetEntityType">
+            Entity type: {{ related.targetEntityType }}
+          </span>
+        </div>
+        <p-button
+          label="View"
+          icon="pi pi-arrow-right"
+          size="small"
+          (onClick)="viewRelatedResource(related.name)"
+        ></p-button>
+      </div>
+    </div>
   </p-dialog>
 </div>
 
