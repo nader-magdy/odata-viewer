@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
+import { Observable, throwError, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
 export interface ODataConnection {
@@ -13,6 +13,7 @@ export interface ODataResource {
   name: string;
   kind: string;
   url: string;
+  accessible?: boolean | null;
 }
 
 export type CountStrategy = 'count' | 'inlinecount';
@@ -322,6 +323,44 @@ export class ODataService {
     }
 
     return null;
+  }
+
+  checkResourceAccessibility(resource: ODataResource): Observable<boolean> {
+    if (!this.connection) {
+      return throwError(() => new Error('No connection configured'));
+    }
+
+    const normalizedUrl = this.normalizeResourceUrl(resource.url);
+    const targetUrl = resource.kind === 'EntitySet'
+      ? this.appendQueryParam(normalizedUrl, '$top=1')
+      : normalizedUrl;
+
+    return this.http.get(targetUrl, {
+      headers: this.getAuthHeaders({ 'Accept': 'application/json' }),
+      observe: 'response',
+      responseType: 'text'
+    }).pipe(
+      map(response => response.status >= 200 && response.status < 300),
+      catchError(() => of(false))
+    );
+  }
+
+  private normalizeResourceUrl(url: string): string {
+    if (!this.connection) {
+      throw new Error('No connection configured');
+    }
+
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+
+    const base = this.connection.url.replace(/\/$/, '');
+    const path = url.replace(/^\//, '');
+    return `${base}/${path}`;
+  }
+
+  private appendQueryParam(url: string, param: string): string {
+    return url.includes('?') ? `${url}&${param}` : `${url}?${param}`;
   }
 }
 

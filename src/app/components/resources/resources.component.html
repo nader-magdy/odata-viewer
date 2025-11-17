@@ -17,6 +17,14 @@
       </div>
     </ng-template>
 
+    <input
+      #fileInput
+      type="file"
+      accept="application/json"
+      (change)="onSnapshotFileSelected($event)"
+      hidden
+    />
+
     <p-message
       *ngIf="errorMessage"
       severity="error"
@@ -51,6 +59,52 @@
       <span class="search-summary">
         Showing {{ filteredResources.length }} of {{ resources.length }} resource(s)
       </span>
+      <div class="accessible-filter">
+        <input
+          type="checkbox"
+          id="accessibleOnlyCheckbox"
+          [(ngModel)]="showAccessibleOnly"
+          (change)="onAccessibleFilterChange()"
+          [disabled]="resources.length === 0"
+        />
+        <label for="accessibleOnlyCheckbox">Accessible only</label>
+      </div>
+    </div>
+
+    <div
+      *ngIf="!loading && resources.length > 0"
+      class="resource-actions"
+    >
+      <div class="actions-group">
+        <p-button
+          label="Check accessibility"
+          icon="pi pi-sync"
+          severity="info"
+          (onClick)="triggerAccessibilityCheck()"
+          [loading]="isCheckingAccessibility"
+          [disabled]="isCheckingAccessibility"
+        ></p-button>
+        <span
+          *ngIf="isCheckingAccessibility"
+          class="accessibility-progress"
+        >
+          Checking {{ checkedAccessibilityCount }} / {{ totalAccessibilityChecks }}
+        </span>
+        <p-button
+          label="Download JSON"
+          icon="pi pi-download"
+          severity="secondary"
+          (onClick)="downloadResourcesSnapshot()"
+        ></p-button>
+      </div>
+      <div class="actions-group">
+        <p-button
+          label="Upload JSON"
+          icon="pi pi-upload"
+          severity="secondary"
+          (onClick)="openSnapshotUpload()"
+        ></p-button>
+      </div>
     </div>
 
     <p-table
@@ -70,9 +124,10 @@
 
       <ng-template pTemplate="header">
         <tr>
-          <th style="width: 40%">Name</th>
+          <th style="width: 35%">Name</th>
           <th style="width: 20%">Kind</th>
-          <th style="width: 40%">URL</th>
+          <th style="width: 15%">Accessible</th>
+          <th style="width: 30%">URL</th>
         </tr>
       </ng-template>
 
@@ -83,6 +138,33 @@
           </td>
           <td>
             <p-tag [value]="resource.kind" [severity]="getSeverity(resource.kind)"></p-tag>
+          </td>
+          <td>
+            <ng-container [ngSwitch]="resource.accessible">
+              <p-tag
+                *ngSwitchCase="true"
+                value="Yes"
+                severity="success"
+              ></p-tag>
+              <p-tag
+                *ngSwitchCase="false"
+                value="No"
+                severity="danger"
+              ></p-tag>
+              <span
+                *ngSwitchDefault
+                class="accessibility-status"
+              >
+                <ng-container *ngIf="isCheckingAccessibility">
+                  <i class="pi pi-spin pi-spinner"></i>
+                  Checking...
+                </ng-container>
+                <ng-container *ngIf="!isCheckingAccessibility">
+                  <i class="pi pi-clock"></i>
+                  Not checked
+                </ng-container>
+              </span>
+            </ng-container>
           </td>
           <td>
             <div class="url-cell">
@@ -103,7 +185,7 @@
 
       <ng-template pTemplate="emptymessage">
         <tr>
-          <td colspan="3">No resources found</td>
+          <td colspan="4">No resources found</td>
         </tr>
       </ng-template>
     </p-table>
