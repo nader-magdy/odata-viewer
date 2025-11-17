@@ -41,6 +41,7 @@
       [totalRecords]="totalRecords"
       [lazy]="true"
       [lazyLoadOnInit]="false"
+      sortMode="multiple"
       (onLazyLoad)="onLazyLoad($event)"
       [loading]="loading"
       [responsiveLayout]="'scroll'"
@@ -48,8 +49,26 @@
     >
       <ng-template pTemplate="header">
         <tr>
-          <th *ngFor="let column of columns; trackBy: trackColumn">
-            {{ column }}
+          <th
+            *ngFor="let column of columns; trackBy: trackColumn"
+            [pSortableColumn]="column"
+            class="data-column-header"
+          >
+            <div class="header-content">
+              <span>{{ column }}</span>
+              <p-sortIcon [field]="column"></p-sortIcon>
+            </div>
+            <p-columnFilter
+              [field]="column"
+              matchMode="contains"
+              display="menu"
+              [showOperator]="false"
+              [showMatchModes]="false"
+              [showAddButton]="false"
+              [showApplyButton]="false"
+              [showClearButton]="true"
+              placeholder="Filter"
+            ></p-columnFilter>
           </th>
           <th class="metadata-column">Metadata</th>
         </tr>

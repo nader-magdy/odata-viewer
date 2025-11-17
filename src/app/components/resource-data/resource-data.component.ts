@@ -4,12 +4,16 @@ import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
 import { MessageModule } from 'primeng/message';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TableModule } from 'primeng/table';
 import type { TableLazyLoadEvent } from 'primeng/table';
 import { Subscription } from 'rxjs';
+import type { FilterMetadata, SortMeta } from 'primeng/api';
 import { ODataService, type CountStrategy } from '../../services/odata.service';
+
+type ColumnValueType = 'string' | 'number' | 'boolean' | 'date' | 'object';
 
 @Component({
   selector: 'app-resource-data',
@@ -20,6 +24,7 @@ import { ODataService, type CountStrategy } from '../../services/odata.service';
     ButtonModule,
     MessageModule,
     DialogModule,
+    InputTextModule,
     ProgressSpinnerModule,
     TableModule
   ],
@@ -37,6 +42,7 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
   pageSize = 25;
   dataInitialized = false;
   countStrategy: CountStrategy | 'none' = 'inlinecount';
+  columnTypes: Record<string, ColumnValueType> = {};
   metadataDialogVisible = false;
   selectedMetadata: unknown = null;
 
@@ -127,6 +133,8 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
   private loadResourceData(resource: string, lazyEvent?: TableLazyLoadEvent, isRetry = false): void {
     const first = lazyEvent?.first ?? 0;
     const resolvedPageSize = lazyEvent?.rows && lazyEvent.rows > 0 ? lazyEvent.rows : this.pageSize;
+    const orderByClause = this.buildOrderByClause(lazyEvent);
+    const filterClause = this.buildFilterClause(lazyEvent);
 
     if (lazyEvent?.rows && lazyEvent.rows > 0) {
       this.pageSize = lazyEvent.rows;
@@ -148,11 +156,14 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
       skip: first,
       top: resolvedPageSize,
       includeCount: shouldIncludeCount,
-      countStrategy: countStrategyParam
+      countStrategy: countStrategyParam,
+      orderBy: orderByClause,
+      filter: filterClause
     }).subscribe({
       next: ({ data, total }) => {
         this.rows = data;
         this.columns = this.extractColumns(data).filter(column => column !== '__metadata');
+        this.updateColumnTypes(data);
 
         if (typeof total === 'number' && !Number.isNaN(total)) {
           this.totalRecords = total;
@@ -190,8 +201,244 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     this.pageSize = 25;
     this.dataInitialized = false;
     this.countStrategy = 'inlinecount';
+    this.columnTypes = {};
     this.loading = true;
     this.closeMetadataDialog();
+  }
+
+  private buildOrderByClause(event?: TableLazyLoadEvent): string | undefined {
+    if (!event) {
+      return undefined;
+    }
+
+    const multiSortMeta = event.multiSortMeta as SortMeta[] | undefined;
+    if (multiSortMeta?.length) {
+      const fragments = multiSortMeta
+        .map(meta => this.createOrderByFragment(meta?.field, meta?.order))
+        .filter((fragment): fragment is string => !!fragment);
+      if (fragments.length > 0) {
+        return fragments.join(',');
+      }
+    }
+
+    const sortField = Array.isArray(event.sortField) ? event.sortField[0] : event.sortField;
+    if (sortField) {
+      const fragment = this.createOrderByFragment(sortField, event.sortOrder);
+      if (fragment) {
+        return fragment;
+      }
+    }
+
+    return undefined;
+  }
+
+  private createOrderByFragment(field?: string | null, order?: number | null | undefined): string | null {
+    if (!field) {
+      return null;
+    }
+    const sanitizedField = this.sanitizeFieldName(field);
+    if (!sanitizedField) {
+      return null;
+    }
+
+    const direction = order === -1 ? 'desc' : 'asc';
+    return `${sanitizedField} ${direction}`;
+  }
+
+  private buildFilterClause(event?: TableLazyLoadEvent): string | undefined {
+    if (!event?.filters) {
+      return undefined;
+    }
+
+    const clauses: string[] = [];
+
+    Object.entries(event.filters).forEach(([field, metadata]) => {
+      const sanitizedField = this.sanitizeFieldName(field);
+      if (!sanitizedField) {
+        return;
+      }
+
+      const metadataEntries = Array.isArray(metadata) ? metadata : [metadata];
+      metadataEntries.forEach((entry) => {
+        const clause = this.filterMetadataToClause(
+          sanitizedField,
+          entry as FilterMetadata,
+          this.getFieldType(field)
+        );
+        if (clause) {
+          clauses.push(clause);
+        }
+      });
+    });
+
+    return clauses.length > 0 ? clauses.join(' and ') : undefined;
+  }
+
+  private filterMetadataToClause(
+    field: string,
+    metadata: FilterMetadata | null | undefined,
+    fieldType: ColumnValueType
+  ): string | null {
+    if (!metadata) {
+      return null;
+    }
+
+    const { value } = metadata;
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+
+    if (fieldType === 'object') {
+      return null;
+    }
+
+    const normalizedMatchMode = this.normalizeMatchMode(metadata.matchMode, fieldType);
+    const literal = this.convertValueToLiteral(value, fieldType);
+
+    switch (normalizedMatchMode) {
+      case 'startsWith':
+        return `startswith(${field},${literal})`;
+      case 'endsWith':
+        return `endswith(${field},${literal})`;
+      case 'equals':
+        return `${field} eq ${literal}`;
+      case 'notEquals':
+        return `${field} ne ${literal}`;
+      case 'contains':
+        return `substringof(${literal},${field})`;
+      default:
+        return `${field} eq ${literal}`;
+    }
+  }
+
+  private convertValueToLiteral(value: unknown, fieldType: ColumnValueType = 'string'): string {
+    if (fieldType === 'number') {
+      const numericValue = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(numericValue) ? String(numericValue) : '0';
+    }
+
+    if (fieldType === 'boolean') {
+      const boolValue = typeof value === 'boolean'
+        ? value
+        : String(value).toLowerCase() === 'true' || value === 1 || value === '1';
+      return boolValue ? 'true' : 'false';
+    }
+
+    if (fieldType === 'date') {
+      const dateValue = value instanceof Date ? value : new Date(String(value));
+      return Number.isNaN(dateValue.getTime()) ? `''` : `'${dateValue.toISOString()}'`;
+    }
+
+    if (typeof value === 'number') {
+      if (Number.isFinite(value)) {
+        return String(value);
+      }
+      return '0';
+    }
+
+    if (typeof value === 'boolean') {
+      return value ? 'true' : 'false';
+    }
+
+    if (value instanceof Date) {
+      return `'${value.toISOString()}'`;
+    }
+
+    return `'${String(value).replace(/'/g, "''")}'`;
+  }
+
+  private sanitizeFieldName(field: string): string {
+    return field?.replace(/[^A-Za-z0-9_\/\.]/g, '');
+  }
+
+  private updateColumnTypes(data: any[]): void {
+    if (!Array.isArray(data) || data.length === 0) {
+      return;
+    }
+
+    const nextTypes: Record<string, ColumnValueType> = { ...this.columnTypes };
+
+    this.columns.forEach((column) => {
+      const detectedType = this.detectColumnType(data, column);
+      if (detectedType) {
+        nextTypes[column] = detectedType;
+        const sanitized = this.sanitizeFieldName(column);
+        if (sanitized && sanitized !== column) {
+          nextTypes[sanitized] = detectedType;
+        }
+      }
+    });
+
+    this.columnTypes = nextTypes;
+  }
+
+  private detectColumnType(data: any[], column: string): ColumnValueType | null {
+    for (const row of data) {
+      if (row && typeof row === 'object' && column in row) {
+        const detected = this.detectValueType(row[column]);
+        if (detected) {
+          return detected;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private detectValueType(value: unknown): ColumnValueType | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'number') {
+      return 'number';
+    }
+
+    if (typeof value === 'boolean') {
+      return 'boolean';
+    }
+
+    if (value instanceof Date) {
+      return 'date';
+    }
+
+    if (typeof value === 'string') {
+      return this.isIsoDateString(value) ? 'date' : 'string';
+    }
+
+    if (typeof value === 'object') {
+      return 'object';
+    }
+
+    return 'string';
+  }
+
+  private isIsoDateString(value: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
+  }
+
+  private getFieldType(field: string): ColumnValueType {
+    const sanitized = this.sanitizeFieldName(field);
+    return this.columnTypes[field] ?? (sanitized ? this.columnTypes[sanitized] : undefined) ?? 'string';
+  }
+
+  private normalizeMatchMode(matchMode: string | undefined, fieldType: ColumnValueType): 'startsWith' | 'endsWith' | 'contains' | 'equals' | 'notEquals' {
+    if (fieldType === 'number' || fieldType === 'boolean' || fieldType === 'date') {
+      return matchMode === 'notEquals' ? 'notEquals' : 'equals';
+    }
+
+    switch (matchMode) {
+      case 'startsWith':
+      case 'endsWith':
+      case 'equals':
+      case 'notEquals':
+      case 'contains':
+        return matchMode;
+      case 'is':
+        return 'equals';
+      default:
+        return 'contains';
+    }
   }
 
   private handleCountStrategyError(resource: string, lazyEvent: TableLazyLoadEvent | undefined, error: Error): boolean {

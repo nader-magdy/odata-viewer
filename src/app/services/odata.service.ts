@@ -22,6 +22,8 @@ export interface ResourceDataRequestOptions {
   top?: number;
   includeCount?: boolean;
   countStrategy?: CountStrategy;
+  orderBy?: string;
+  filter?: string;
 }
 
 export interface ResourceDataResult {
@@ -249,6 +251,14 @@ export class ODataService {
       } else {
         queryParts.push(`$count=true`);
       }
+    }
+
+    if (options.orderBy) {
+      queryParts.push(`$orderby=${encodeURIComponent(options.orderBy)}`);
+    }
+
+    if (options.filter) {
+      queryParts.push(`$filter=${encodeURIComponent(options.filter)}`);
     }
 
     const urlWithFormat = queryParts.length > 0
