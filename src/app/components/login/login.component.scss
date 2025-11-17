@@ -48,6 +48,17 @@
   margin-top: 1.5rem;
 }
 
+.remember-me {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  label {
+    margin: 0;
+    font-weight: 500;
+  }
+}
+
 ::ng-deep {
   .p-password {
     width: 100%;

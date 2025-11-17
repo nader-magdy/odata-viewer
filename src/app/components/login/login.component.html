@@ -54,6 +54,17 @@
         ></p-password>
       </div>
 
+      <div class="form-group remember-me">
+        <input
+          id="rememberMe"
+          type="checkbox"
+          [(ngModel)]="rememberMe"
+          name="rememberMe"
+          [disabled]="loading"
+        />
+        <label for="rememberMe">Remember me</label>
+      </div>
+
       <p-message
         *ngIf="errorMessage"
         severity="error"

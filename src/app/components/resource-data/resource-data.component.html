@@ -8,6 +8,13 @@
         </div>
         <div class="header-actions">
           <p-button
+            label="Columns Options"
+            icon="pi pi-table"
+            severity="secondary"
+            (onClick)="openColumnOptionsDialog()"
+            [disabled]="allColumns.length === 0"
+          ></p-button>
+          <p-button
             label="Related Resources"
             icon="pi pi-share-alt"
             severity="help"
@@ -116,13 +123,61 @@
     [dismissableMask]="true"
     (onHide)="closeMetadataDialog()"
   >
-    <ng-container *ngIf="selectedMetadata; else noMetadata">
-      <pre>{{ formatValue(selectedMetadata) }}</pre>
+    <ng-container *ngIf="metadataEntries.length > 0; else noMetadata">
+      <div class="metadata-entries">
+        <div class="metadata-row" *ngFor="let entry of metadataEntries">
+          <div class="metadata-key">{{ entry.key }}</div>
+          <pre class="metadata-value">{{ entry.value }}</pre>
+        </div>
+      </div>
     </ng-container>
 
     <ng-template #noMetadata>
       <p>No metadata available for this record.</p>
     </ng-template>
+  </p-dialog>
+
+  <p-dialog
+    header="Column Options"
+    [(visible)]="columnOptionsDialogVisible"
+    [modal]="true"
+    [style]="{ width: '400px' }"
+    [dismissableMask]="true"
+    (onHide)="closeColumnOptionsDialog()"
+  >
+    <div class="column-options-actions" *ngIf="allColumns.length > 0">
+      <p-button
+        label="Select All"
+        icon="pi pi-check-square"
+        size="small"
+        (onClick)="selectAllColumns()"
+      ></p-button>
+      <p-button
+        label="Unselect All"
+        icon="pi pi-times-circle"
+        severity="secondary"
+        size="small"
+        (onClick)="clearAllColumns()"
+      ></p-button>
+    </div>
+
+    <div *ngIf="allColumns.length === 0" class="columns-empty">
+      <p>No columns available yet.</p>
+    </div>
+    <div *ngIf="allColumns.length > 0" class="column-options">
+      <div
+        class="column-option"
+        *ngFor="let column of allColumns"
+      >
+        <input
+          type="checkbox"
+          [id]="'column-' + column"
+          [checked]="columnSelection[column] !== false"
+          (change)="onColumnToggle(column, $event)"
+        />
+        <label [for]="'column-' + column">{{ column }}</label>
+      </div>
+    </div>
   </p-dialog>
 
   <p-dialog

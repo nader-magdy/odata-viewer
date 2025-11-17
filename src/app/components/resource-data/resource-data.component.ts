@@ -38,6 +38,8 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
   errorMessage = '';
   rows: any[] = [];
   columns: string[] = [];
+  allColumns: string[] = [];
+  columnSelection: Record<string, boolean> = {};
   totalRecords = 0;
   pageSize = 25;
   dataInitialized = false;
@@ -45,7 +47,10 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
   columnTypes: Record<string, ColumnValueType> = {};
   metadataDialogVisible = false;
   selectedMetadata: unknown = null;
+  metadataEntries: { key: string; value: string }[] = [];
   relatedResourcesDialogVisible = false;
+  columnOptionsDialogVisible = false;
+
   relatedResourcesLoading = false;
   relatedResourcesError = '';
   relatedResources: ODataRelatedResource[] = [];
@@ -127,12 +132,22 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
 
   openMetadataDialog(metadata: unknown): void {
     this.selectedMetadata = metadata;
+    this.metadataEntries = this.transformMetadataToEntries(metadata);
     this.metadataDialogVisible = true;
   }
 
   closeMetadataDialog(): void {
     this.metadataDialogVisible = false;
     this.selectedMetadata = null;
+    this.metadataEntries = [];
+  }
+
+  openColumnOptionsDialog(): void {
+    this.columnOptionsDialogVisible = true;
+  }
+
+  closeColumnOptionsDialog(): void {
+    this.columnOptionsDialogVisible = false;
   }
 
   openRelatedResourcesDialog(): void {
@@ -183,7 +198,10 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: ({ data, total }) => {
         this.rows = data;
-        this.columns = this.extractColumns(data).filter(column => column !== '__metadata');
+        const extractedColumns = this.extractColumns(data).filter(column => column !== '__metadata');
+        this.allColumns = extractedColumns;
+        this.syncColumnSelection(extractedColumns);
+        this.columns = this.getVisibleColumns();
         this.updateColumnTypes(data);
 
         if (typeof total === 'number' && !Number.isNaN(total)) {
@@ -223,8 +241,12 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     this.dataInitialized = false;
     this.countStrategy = 'inlinecount';
     this.columnTypes = {};
+    this.columns = [];
+    this.allColumns = [];
+    this.columnSelection = {};
     this.loading = true;
     this.closeMetadataDialog();
+    this.columnOptionsDialogVisible = false;
     this.relatedResources = [];
     this.relatedResourcesError = '';
     this.relatedResourcesLoading = false;
@@ -396,6 +418,106 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     });
 
     this.columnTypes = nextTypes;
+  }
+
+  private transformMetadataToEntries(metadata: unknown): { key: string; value: string }[] {
+    if (metadata === null || metadata === undefined) {
+      return [];
+    }
+
+    if (typeof metadata === 'string') {
+      const parsed = this.tryParseJson(metadata);
+      if (parsed !== null) {
+        return this.transformMetadataToEntries(parsed);
+      }
+      return [{ key: 'value', value: metadata }];
+    }
+
+    if (Array.isArray(metadata)) {
+      return metadata.map((item, index) => ({
+        key: `[${index}]`,
+        value: this.stringifyMetadataValue(item)
+      }));
+    }
+
+    if (typeof metadata === 'object') {
+      return Object.entries(metadata as Record<string, unknown>).map(([key, value]) => ({
+        key,
+        value: this.stringifyMetadataValue(value)
+      }));
+    }
+
+    return [{ key: 'value', value: String(metadata) }];
+  }
+
+  private stringifyMetadataValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      const parsed = this.tryParseJson(value);
+      if (parsed !== null) {
+        return JSON.stringify(parsed, null, 2);
+      }
+      return value;
+    }
+
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2);
+    }
+
+    return String(value);
+  }
+
+  private tryParseJson(value: string): unknown | null {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  private syncColumnSelection(columns: string[]): void {
+    const nextSelection: Record<string, boolean> = { ...this.columnSelection };
+
+    columns.forEach((column) => {
+      if (!(column in nextSelection)) {
+        nextSelection[column] = true;
+      }
+    });
+
+    Object.keys(nextSelection).forEach((key) => {
+      if (!columns.includes(key)) {
+        delete nextSelection[key];
+      }
+    });
+
+    this.columnSelection = nextSelection;
+  }
+
+  private getVisibleColumns(): string[] {
+    return this.allColumns.filter((column) => this.columnSelection[column] !== false);
+  }
+
+  onColumnToggle(column: string, event: Event): void {
+    const checkbox = event.target as HTMLInputElement;
+    this.columnSelection[column] = checkbox.checked;
+    this.columns = this.getVisibleColumns();
+  }
+
+  selectAllColumns(): void {
+    this.allColumns.forEach((column) => {
+      this.columnSelection[column] = true;
+    });
+    this.columns = this.getVisibleColumns();
+  }
+
+  clearAllColumns(): void {
+    this.allColumns.forEach((column) => {
+      this.columnSelection[column] = false;
+    });
+    this.columns = this.getVisibleColumns();
   }
 
   private fetchRelatedResources(): void {
