@@ -13,10 +13,15 @@ import { FormsModule } from '@angular/forms';
 import { ODataService, ODataResource } from '../../services/odata.service';
 import { Subscription } from 'rxjs';
 
+type ResourceWithState = ODataResource & {
+  accessible: boolean | null;
+  favourites: boolean;
+};
+
 interface ResourceSnapshot {
   connectionUrl?: string;
   generatedAt?: string;
-  resources?: Partial<ODataResource>[];
+  resources?: Partial<ResourceWithState>[];
 }
 
 @Component({
@@ -38,14 +43,15 @@ interface ResourceSnapshot {
   styleUrl: './resources.component.scss'
 })
 export class ResourcesComponent implements OnInit, OnDestroy {
-  resources: ODataResource[] = [];
-  filteredResources: ODataResource[] = [];
+  resources: ResourceWithState[] = [];
+  filteredResources: ResourceWithState[] = [];
   loading: boolean = true;
   errorMessage: string = '';
   connectionUrl: string = '';
   searchTerm: string = '';
   isCheckingAccessibility: boolean = false;
   showAccessibleOnly: boolean = false;
+  showFavouritesOnly: boolean = false;
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
   private accessibilitySubscriptions: Subscription[] = [];
   private pendingAccessibilityChecks = 0;
@@ -81,7 +87,8 @@ export class ResourcesComponent implements OnInit, OnDestroy {
       next: (resources) => {
         this.resources = resources.map((resource) => ({
           ...resource,
-          accessible: null
+          accessible: null,
+          favourites: false
         }));
         this.applyFilter();
         this.loading = false;
@@ -98,6 +105,10 @@ export class ResourcesComponent implements OnInit, OnDestroy {
   }
 
   onAccessibleFilterChange(): void {
+    this.applyFilter();
+  }
+
+  onFavouritesFilterChange(): void {
     this.applyFilter();
   }
 
@@ -169,6 +180,10 @@ export class ResourcesComponent implements OnInit, OnDestroy {
         return false;
       }
 
+      if (this.showFavouritesOnly && resource.favourites !== true) {
+        return false;
+      }
+
       if (!term) {
         return true;
       }
@@ -199,6 +214,11 @@ export class ResourcesComponent implements OnInit, OnDestroy {
 
   openResource(resource: ODataResource): void {
     this.router.navigate(['/resources', resource.name]);
+  }
+
+  toggleFavourite(resource: ResourceWithState, event?: Event): void {
+    event?.stopPropagation();
+    resource.favourites = !resource.favourites;
   }
 
   private startAccessibilityChecks(): void {
@@ -239,7 +259,7 @@ export class ResourcesComponent implements OnInit, OnDestroy {
 
     const sanitized = snapshot.resources
       .map((resource) => this.sanitizeResource(resource))
-      .filter((resource): resource is ODataResource => !!resource);
+      .filter((resource): resource is ResourceWithState => !!resource);
 
     this.resetAccessibilityState();
 
@@ -253,7 +273,7 @@ export class ResourcesComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
   }
 
-  private sanitizeResource(resource: Partial<ODataResource> | undefined | null): ODataResource | null {
+  private sanitizeResource(resource: Partial<ResourceWithState> | undefined | null): ResourceWithState | null {
     if (!resource || !resource.name || !resource.kind || !resource.url) {
       return null;
     }
@@ -262,7 +282,8 @@ export class ResourcesComponent implements OnInit, OnDestroy {
       name: resource.name,
       kind: resource.kind,
       url: resource.url,
-      accessible: typeof resource.accessible === 'boolean' ? resource.accessible : null
+      accessible: typeof resource.accessible === 'boolean' ? resource.accessible : null,
+      favourites: typeof resource.favourites === 'boolean' ? resource.favourites : false
     };
   }
 

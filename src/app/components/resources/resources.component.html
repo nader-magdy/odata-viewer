@@ -7,30 +7,14 @@
             <h1>OData Resources</h1>
             <p class="connection-info">{{ connectionUrl }}</p>
           </div>
-          <p-button
-            label="Disconnect"
-            icon="pi pi-sign-out"
-            severity="secondary"
-            (onClick)="disconnect()"
-          ></p-button>
+          <p-button label="Disconnect" icon="pi pi-sign-out" severity="secondary" (onClick)="disconnect()"></p-button>
         </div>
       </div>
     </ng-template>
 
-    <input
-      #fileInput
-      type="file"
-      accept="application/json"
-      (change)="onSnapshotFileSelected($event)"
-      hidden
-    />
+    <input #fileInput type="file" accept="application/json" (change)="onSnapshotFileSelected($event)" hidden />
 
-    <p-message
-      *ngIf="errorMessage"
-      severity="error"
-      [text]="errorMessage"
-      styleClass="w-full mb-3"
-    ></p-message>
+    <p-message *ngIf="errorMessage" severity="error" [text]="errorMessage" styleClass="w-full mb-3"></p-message>
 
     <div *ngIf="loading" class="loading-container">
       <p-progressSpinner></p-progressSpinner>
@@ -42,80 +26,47 @@
       <p>No resources found</p>
     </div>
 
-    <div
-      *ngIf="!loading && resources.length > 0"
-      class="search-bar"
-    >
+    <div *ngIf="!loading && resources.length > 0" class="search-bar">
       <span class="p-input-icon-left">
         <i class="pi pi-search"></i>
-        <input
-          pInputText
-          type="text"
-          placeholder="Search by name, kind, or URL"
-          [(ngModel)]="searchTerm"
-          (ngModelChange)="onSearchTermChange()"
-        />
+        <input pInputText type="text" placeholder="Search by name, kind, or URL" [(ngModel)]="searchTerm"
+          (ngModelChange)="onSearchTermChange()" />
       </span>
       <span class="search-summary">
         Showing {{ filteredResources.length }} of {{ resources.length }} resource(s)
       </span>
-      <div class="accessible-filter">
-        <input
-          type="checkbox"
-          id="accessibleOnlyCheckbox"
-          [(ngModel)]="showAccessibleOnly"
-          (change)="onAccessibleFilterChange()"
-          [disabled]="resources.length === 0"
-        />
-        <label for="accessibleOnlyCheckbox">Accessible only</label>
+      <div class="filter-toggles">
+        <label class="filter-toggle" for="accessibleOnlyCheckbox">
+          <input type="checkbox" id="accessibleOnlyCheckbox" [(ngModel)]="showAccessibleOnly"
+            (change)="onAccessibleFilterChange()" [disabled]="resources.length === 0" />
+          <span>Accessible only</span>
+        </label>
+        <label class="filter-toggle" for="favouritesOnlyCheckbox">
+          <input type="checkbox" id="favouritesOnlyCheckbox" [(ngModel)]="showFavouritesOnly"
+            (change)="onFavouritesFilterChange()" [disabled]="resources.length === 0" />
+          <span>Favourites only</span>
+        </label>
       </div>
     </div>
-
-    <div
-      *ngIf="!loading && resources.length > 0"
-      class="resource-actions"
-    >
+    @if (!loading && resources.length > 0){
+    <div class="resource-actions">
       <div class="actions-group">
-        <p-button
-          label="Check accessibility"
-          icon="pi pi-sync"
-          severity="info"
-          (onClick)="triggerAccessibilityCheck()"
-          [loading]="isCheckingAccessibility"
-          [disabled]="isCheckingAccessibility"
-        ></p-button>
-        <span
-          *ngIf="isCheckingAccessibility"
-          class="accessibility-progress"
-        >
+        <p-button label="Check accessibility" icon="pi pi-sync" severity="info" (onClick)="triggerAccessibilityCheck()"
+          [loading]="isCheckingAccessibility" [disabled]="isCheckingAccessibility"></p-button>
+        <span *ngIf="isCheckingAccessibility" class="accessibility-progress">
           Checking {{ checkedAccessibilityCount }} / {{ totalAccessibilityChecks }}
         </span>
-        <p-button
-          label="Download JSON"
-          icon="pi pi-download"
-          severity="secondary"
-          (onClick)="downloadResourcesSnapshot()"
-        ></p-button>
+        <p-button label="Download JSON" icon="pi pi-download" severity="secondary"
+          (onClick)="downloadResourcesSnapshot()"></p-button>
       </div>
       <div class="actions-group">
-        <p-button
-          label="Upload JSON"
-          icon="pi pi-upload"
-          severity="secondary"
-          (onClick)="openSnapshotUpload()"
-        ></p-button>
+        <p-button label="Upload JSON" icon="pi pi-upload" severity="secondary"
+          (onClick)="openSnapshotUpload()"></p-button>
       </div>
     </div>
 
-    <p-table
-      *ngIf="!loading && resources.length > 0"
-      [value]="filteredResources"
-      [paginator]="true"
-      [rows]="20"
-      [rowsPerPageOptions]="[10, 20, 50, 100]"
-      styleClass="p-datatable-striped"
-      [tableStyle]="{ 'min-width': '50rem' }"
-    >
+    <p-table [value]="filteredResources" [paginator]="true" [rows]="20" [rowsPerPageOptions]="[10, 20, 50, 100]"
+      styleClass="p-datatable-striped" [tableStyle]="{ 'min-width': '50rem' }">
       <ng-template pTemplate="caption">
         <div class="table-header">
           <span class="resource-count">Found {{ filteredResources.length }} resource(s)</span>
@@ -124,15 +75,25 @@
 
       <ng-template pTemplate="header">
         <tr>
-          <th style="width: 35%">Name</th>
+          <th style="width: 8%">Favourite</th>
+          <th style="width: 32%">Name</th>
           <th style="width: 20%">Kind</th>
           <th style="width: 15%">Accessible</th>
-          <th style="width: 30%">URL</th>
+          <th style="width: 25%">URL</th>
         </tr>
       </ng-template>
 
       <ng-template pTemplate="body" let-resource>
         <tr>
+          <td>
+            <button type="button" class="favourite-toggle" [class.is-active]="resource.favourites"
+              (click)="toggleFavourite(resource, $event)" pTooltip="Toggle favourite">
+              <i class="pi" [class.pi-star-fill]="resource.favourites" [class.pi-star]="!resource.favourites" aria-hidden="true"></i>
+              <span class="visually-hidden">
+                {{ resource.favourites ? 'Remove from favourites' : 'Mark as favourite' }}
+              </span>
+            </button>
+          </td>
           <td>
             <strong>{{ resource.name }}</strong>
           </td>
@@ -141,20 +102,9 @@
           </td>
           <td>
             <ng-container [ngSwitch]="resource.accessible">
-              <p-tag
-                *ngSwitchCase="true"
-                value="Yes"
-                severity="success"
-              ></p-tag>
-              <p-tag
-                *ngSwitchCase="false"
-                value="No"
-                severity="danger"
-              ></p-tag>
-              <span
-                *ngSwitchDefault
-                class="accessibility-status"
-              >
+              <p-tag *ngSwitchCase="true" value="Yes" severity="success"></p-tag>
+              <p-tag *ngSwitchCase="false" value="No" severity="danger"></p-tag>
+              <span *ngSwitchDefault class="accessibility-status">
                 <ng-container *ngIf="isCheckingAccessibility">
                   <i class="pi pi-spin pi-spinner"></i>
                   Checking...
@@ -169,15 +119,8 @@
           <td>
             <div class="url-cell">
               <span class="url-text">{{ resource.url }}</span>
-              <p-button
-                icon="pi pi-database"
-                label="View data"
-                [text]="true"
-                severity="secondary"
-                [rounded]="true"
-                (onClick)="openResource(resource)"
-                pTooltip="View resource data"
-              ></p-button>
+              <p-button icon="pi pi-database" label="View data" [text]="true" severity="secondary" [rounded]="true"
+                (onClick)="openResource(resource)" pTooltip="View resource data"></p-button>
             </div>
           </td>
         </tr>
@@ -185,10 +128,10 @@
 
       <ng-template pTemplate="emptymessage">
         <tr>
-          <td colspan="4">No resources found</td>
+          <td colspan="5">No resources found</td>
         </tr>
       </ng-template>
     </p-table>
+    }
   </p-card>
 </div>
-
