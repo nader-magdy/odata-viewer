@@ -85,6 +85,88 @@
           </div>
         </div>
       </section>
+
+      <section class="related-section">
+        <div class="section-heading">
+          <h2>Related Resources</h2>
+        </div>
+
+        <div *ngIf="relatedResourcesLoading" class="related-loading">
+          <p-progressSpinner styleClass="sm-spinner"></p-progressSpinner>
+          <span>Loading related resources...</span>
+        </div>
+
+        <p-message
+          *ngIf="relatedResourcesError"
+          severity="warn"
+          [text]="relatedResourcesError"
+          styleClass="w-full mb-3"
+        ></p-message>
+
+        <div *ngIf="!relatedResourcesLoading && !relatedResourcesError">
+          <div *ngIf="relatedResourceSections.length === 0" class="related-empty">
+            <p>No related resources available for this record.</p>
+          </div>
+
+          <div *ngFor="let section of relatedResourceSections" class="related-card">
+            <div class="related-card-header">
+              <div class="related-info">
+                <strong>{{ section.info.name }}</strong>
+                <span class="relation-detail">via {{ section.info.viaProperty }}</span>
+                <span class="relation-detail" *ngIf="section.info.targetEntityType">
+                  Entity type: {{ section.info.targetEntityType }}
+                </span>
+              </div>
+              <p-button
+                label="Open"
+                icon="pi pi-external-link"
+                size="small"
+                severity="secondary"
+                (onClick)="viewRelatedResource(section.info.name)"
+              ></p-button>
+            </div>
+
+            <div *ngIf="section.loading" class="related-card-loading">
+              <p-progressSpinner styleClass="sm-spinner"></p-progressSpinner>
+              <span>Loading data...</span>
+            </div>
+
+            <p-message
+              *ngIf="!section.loading && section.error"
+              severity="warn"
+              [text]="section.error"
+              styleClass="w-full mb-3"
+            ></p-message>
+
+            <div *ngIf="!section.loading && !section.error">
+              <div *ngIf="section.rows.length === 0" class="related-empty">
+                <p>No data available.</p>
+              </div>
+
+              <p-table
+                *ngIf="section.rows.length > 0"
+                [value]="section.rows"
+                [responsiveLayout]="'scroll'"
+                class="related-table"
+              >
+                <ng-template pTemplate="header">
+                  <tr>
+                    <th *ngFor="let column of section.columns">{{ column }}</th>
+                  </tr>
+                </ng-template>
+
+                <ng-template pTemplate="body" let-row>
+                  <tr>
+                    <td *ngFor="let column of section.columns">
+                      {{ formatValue(row[column]) }}
+                    </td>
+                  </tr>
+                </ng-template>
+              </p-table>
+            </div>
+          </div>
+        </div>
+      </section>
     </ng-container>
   </p-card>
 </div>

@@ -115,6 +115,66 @@
   word-break: break-word;
 }
 
+.related-section {
+  margin-top: 2rem;
+}
+
+.related-loading,
+.related-card-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-color-secondary);
+  padding: 1rem 0;
+
+  :host ::ng-deep .sm-spinner {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+.related-empty {
+  color: var(--text-color-secondary);
+  padding: 1rem 0;
+}
+
+.related-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.related-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.related-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  .relation-detail {
+    font-size: 0.85rem;
+    color: var(--text-color-secondary);
+  }
+}
+
+.related-table {
+  width: 100%;
+
+  :host ::ng-deep .p-datatable-tbody > tr > td {
+    word-break: break-word;
+  }
+}
+
 @media (max-width: 600px) {
   .metadata-row {
     grid-template-columns: 1fr;

@@ -240,6 +240,68 @@ export class ODataService {
 
     const normalizedName = resourceName.replace(/^\//, '');
     const baseUrl = `${this.connection.url}/${normalizedName}`;
+    const urlWithFormat = this.buildDataRequestUrl(baseUrl, options);
+
+    return this.http.get(urlWithFormat, {
+      headers: this.getAuthHeaders({ 'Accept': 'application/json' })
+    }).pipe(
+      map((response: any) => {
+        const data = this.extractDataArray(response);
+        const total = this.extractTotalCount(response);
+        return {
+          data,
+          total
+        };
+      }),
+      catchError((error: HttpErrorResponse) => {
+        return throwError(() => new Error(`Failed to fetch data for ${resourceName}: ${error.message}`));
+      })
+    );
+  }
+
+  getNavigationPropertyData(
+    resourceName: string,
+    resourceKey: string,
+    navigationProperty: string,
+    options: ResourceDataRequestOptions = {}
+  ): Observable<ResourceDataResult> {
+    if (!this.connection) {
+      return throwError(() => new Error('No connection configured'));
+    }
+
+    const normalizedResource = resourceName.replace(/^\//, '');
+    const trimmedKey = resourceKey?.trim();
+    if (!trimmedKey) {
+      return throwError(() => new Error('Invalid resource key'));
+    }
+
+    const sanitizedNavigation = navigationProperty?.replace(/[^A-Za-z0-9_\/\.]/g, '');
+    if (!sanitizedNavigation) {
+      return throwError(() => new Error('Invalid navigation property'));
+    }
+
+    const keySegment = trimmedKey.startsWith('(') ? trimmedKey : `(${trimmedKey})`;
+    const baseUrl = `${this.connection.url}/${normalizedResource}${keySegment}/${sanitizedNavigation}`;
+    const urlWithFormat = this.buildDataRequestUrl(baseUrl, options);
+
+    return this.http.get(urlWithFormat, {
+      headers: this.getAuthHeaders({ 'Accept': 'application/json' })
+    }).pipe(
+      map((response: any) => {
+        const data = this.extractDataArray(response);
+        const total = this.extractTotalCount(response);
+        return {
+          data,
+          total
+        };
+      }),
+      catchError((error: HttpErrorResponse) => {
+        return throwError(() => new Error(`Failed to fetch related data for ${navigationProperty}: ${error.message}`));
+      })
+    );
+  }
+
+  private buildDataRequestUrl(baseUrl: string, options: ResourceDataRequestOptions = {}): string {
     const queryParts: string[] = ['$format=json'];
     const countStrategy: CountStrategy = options.countStrategy ?? 'inlinecount';
 
@@ -267,25 +329,9 @@ export class ODataService {
       queryParts.push(`$filter=${encodeURIComponent(options.filter)}`);
     }
 
-    const urlWithFormat = queryParts.length > 0
+    return queryParts.length > 0
       ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${queryParts.join('&')}`
       : baseUrl;
-
-    return this.http.get(urlWithFormat, {
-      headers: this.getAuthHeaders({ 'Accept': 'application/json' })
-    }).pipe(
-      map((response: any) => {
-        const data = this.extractDataArray(response);
-        const total = this.extractTotalCount(response);
-        return {
-          data,
-          total
-        };
-      }),
-      catchError((error: HttpErrorResponse) => {
-        return throwError(() => new Error(`Failed to fetch data for ${resourceName}: ${error.message}`));
-      })
-    );
   }
 
   private extractDataArray(response: any): any[] {

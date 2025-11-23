@@ -1,17 +1,26 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { MessageModule } from 'primeng/message';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TableModule } from 'primeng/table';
-import { ODataService } from '../../services/odata.service';
+import { Subscription } from 'rxjs';
+import { ODataRelatedResource, ODataService } from '../../services/odata.service';
 
 interface RecordEntry {
   key: string;
   value: string;
   multiline: boolean;
+}
+
+interface RelatedResourceSection {
+  info: ODataRelatedResource;
+  rows: any[];
+  columns: string[];
+  loading: boolean;
+  error: string;
 }
 
 @Component({
@@ -28,7 +37,7 @@ interface RecordEntry {
   templateUrl: './resource-details.component.html',
   styleUrl: './resource-details.component.scss'
 })
-export class ResourceDetailsComponent implements OnInit {
+export class ResourceDetailsComponent implements OnInit, OnDestroy {
   resourceName = '';
   resourceId = '';
   connectionUrl = '';
@@ -36,6 +45,13 @@ export class ResourceDetailsComponent implements OnInit {
   metadataEntries: { key: string; value: string }[] = [];
   loading = true;
   errorMessage = '';
+  relatedResourceSections: RelatedResourceSection[] = [];
+  relatedResourcesLoading = false;
+  relatedResourcesError = '';
+  private recordKey: string | null = null;
+  private relatedResourcesSubscription?: Subscription;
+  private relatedDataSubscriptions: Subscription[] = [];
+  private routeSubscription?: Subscription;
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -52,11 +68,18 @@ export class ResourceDetailsComponent implements OnInit {
 
     this.connectionUrl = connection.url;
 
-    this.route.paramMap.subscribe((params) => {
+    this.routeSubscription = this.route.paramMap.subscribe((params) => {
       this.resourceName = params.get('resourceName') ?? '';
       this.resourceId = params.get('resourceId') ?? '';
       this.initializeRecordDetails();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.routeSubscription?.unsubscribe();
+    this.relatedResourcesSubscription?.unsubscribe();
+    this.relatedDataSubscriptions.forEach((sub) => sub.unsubscribe());
+    this.relatedDataSubscriptions = [];
   }
 
   backToResource(): void {
@@ -70,6 +93,8 @@ export class ResourceDetailsComponent implements OnInit {
   private initializeRecordDetails(): void {
     this.loading = true;
     this.errorMessage = '';
+    this.resetRelatedResourcesState();
+    this.recordKey = null;
 
     const state = this.getNavigationState();
     const recordData = state?.['recordData'] as Record<string, unknown> | undefined;
@@ -85,7 +110,72 @@ export class ResourceDetailsComponent implements OnInit {
 
     this.recordEntries = this.buildRecordEntries(recordData as Record<string, unknown>);
     this.metadataEntries = this.transformMetadataToEntries(metadata);
+    this.recordKey = this.resolveRecordKey(recordData as Record<string, unknown>);
+
+    this.loadRelatedResourcesData();
     this.loading = false;
+  }
+
+  private loadRelatedResourcesData(): void {
+    this.resetRelatedResourcesState();
+
+    if (!this.resourceName) {
+      return;
+    }
+
+    if (!this.recordKey) {
+      this.relatedResourcesError = 'Record identifier unavailable. Related data cannot be loaded.';
+      return;
+    }
+
+    this.relatedResourcesLoading = true;
+    this.relatedResourcesSubscription = this.odataService.getRelatedResources(this.resourceName).subscribe({
+      next: (resources) => {
+        this.relatedResourcesLoading = false;
+        if (!resources.length) {
+          this.relatedResourceSections = [];
+          return;
+        }
+
+        this.relatedResourceSections = resources.map((resource) => ({
+          info: resource,
+          rows: [],
+          columns: [],
+          loading: true,
+          error: ''
+        }));
+
+        this.relatedResourceSections.forEach((section) => this.fetchRelatedSection(section));
+      },
+      error: (error: Error) => {
+        this.relatedResourcesLoading = false;
+        this.relatedResourcesError = error.message || 'Failed to load related resources metadata.';
+      }
+    });
+  }
+
+  private fetchRelatedSection(section: RelatedResourceSection): void {
+    if (!this.resourceName || !this.recordKey) {
+      section.loading = false;
+      section.error = 'Missing record identifier.';
+      return;
+    }
+
+    const subscription = this.odataService
+      .getNavigationPropertyData(this.resourceName, this.recordKey, section.info.viaProperty, { top: 5 })
+      .subscribe({
+        next: (result) => {
+          section.rows = result.data ?? [];
+          section.columns = this.extractColumns(section.rows);
+          section.loading = false;
+        },
+        error: (error: Error) => {
+          section.error = error.message || `Failed to load ${section.info.name}`;
+          section.loading = false;
+        }
+      });
+
+    this.relatedDataSubscriptions.push(subscription);
   }
 
   private getNavigationState(): Record<string, unknown> | undefined {
@@ -99,6 +189,88 @@ export class ResourceDetailsComponent implements OnInit {
     }
 
     return undefined;
+  }
+
+  private resolveRecordKey(recordData?: Record<string, unknown>): string | null {
+    const state = this.getNavigationState();
+    const candidate = (state?.['recordId'] ?? this.resourceId) as string | undefined;
+    const normalizedCandidate = this.normalizeRecordKey(candidate);
+    if (normalizedCandidate) {
+      return normalizedCandidate;
+    }
+
+    const metadata = (recordData ?? (state?.['recordData'] as Record<string, unknown> | undefined))?.['__metadata'];
+    if (metadata && typeof metadata === 'object') {
+      const uri = (metadata as Record<string, unknown>)['uri'];
+      if (typeof uri === 'string') {
+        const parsed = this.extractKeyFromMetadataUri(uri);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private normalizeRecordKey(value?: string): string | null {
+    if (!value) {
+      return null;
+    }
+
+    let decoded = value;
+    try {
+      decoded = decodeURIComponent(value);
+    } catch {
+      decoded = value;
+    }
+
+    let trimmed = decoded.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+      trimmed = trimmed.slice(1, -1);
+    }
+
+    return trimmed || null;
+  }
+
+  private extractKeyFromMetadataUri(uri: string): string | null {
+    const match = /\((.+)\)\s*$/.exec(uri);
+    return match?.[1] ?? null;
+  }
+  private resetRelatedResourcesState(): void {
+    this.relatedResourcesLoading = false;
+    this.relatedResourcesError = '';
+    this.relatedResourceSections = [];
+    this.relatedResourcesSubscription?.unsubscribe();
+    this.relatedResourcesSubscription = undefined;
+    this.relatedDataSubscriptions.forEach((sub) => sub.unsubscribe());
+    this.relatedDataSubscriptions = [];
+  }
+
+  viewRelatedResource(resourceName: string): void {
+    if (!resourceName) {
+      return;
+    }
+    this.router.navigate(['/resources', resourceName]);
+  }
+
+  private extractColumns(data: any[]): string[] {
+    if (!Array.isArray(data) || data.length === 0) {
+      return [];
+    }
+
+    const columnSet = new Set<string>();
+    data.forEach((row) => {
+      if (row && typeof row === 'object') {
+        Object.keys(row).forEach((key) => columnSet.add(key));
+      }
+    });
+
+    return Array.from(columnSet);
   }
 
   private buildRecordEntries(record: Record<string, unknown>): RecordEntry[] {
