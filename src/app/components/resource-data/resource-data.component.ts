@@ -166,6 +166,47 @@ export class ResourceDataComponent implements OnInit, OnDestroy {
     this.router.navigate(['/resources', resourceName]);
   }
 
+  viewRecordDetails(row: Record<string, unknown>, rowIndex: number): void {
+    if (!row || !this.resourceName) {
+      return;
+    }
+
+    const recordId = this.resolveRecordIdentifier(row, rowIndex);
+
+    this.router.navigate(['/resources', this.resourceName, 'details', recordId], {
+      state: {
+        recordData: row,
+        metadata: row?.['__metadata'] ?? null,
+        recordIndex: rowIndex,
+        recordId
+      }
+    });
+  }
+
+  private resolveRecordIdentifier(row: Record<string, unknown>, fallbackIndex: number): string {
+    const metadata = row?.['__metadata'];
+    if (metadata && typeof metadata === 'object') {
+      const uri = (metadata as Record<string, unknown>)['uri'];
+      if (typeof uri === 'string' && uri.trim().length > 0) {
+        const parenMatch = /\((.+)\)$/.exec(uri);
+        if (parenMatch?.[1]) {
+          return encodeURIComponent(parenMatch[1]);
+        }
+        return encodeURIComponent(uri);
+      }
+    }
+
+    const idKey = Object.keys(row).find((key) => key.toLowerCase().endsWith('id'));
+    if (idKey) {
+      const value = row[idKey];
+      if (value !== undefined && value !== null) {
+        return encodeURIComponent(String(value));
+      }
+    }
+
+    return String(fallbackIndex);
+  }
+
   private loadResourceData(resource: string, lazyEvent?: TableLazyLoadEvent, isRetry = false): void {
     const first = lazyEvent?.first ?? 0;
     const resolvedPageSize = lazyEvent?.rows && lazyEvent.rows > 0 ? lazyEvent.rows : this.pageSize;

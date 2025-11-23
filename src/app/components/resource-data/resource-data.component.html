@@ -64,6 +64,14 @@
     >
       <ng-template pTemplate="header">
         <tr>
+          <th class="details-column action-column" title="View details">
+            <i class="pi pi-eye" aria-hidden="true"></i>
+            <span class="visually-hidden">Details</span>
+          </th>
+          <th class="metadata-column action-column" title="View metadata">
+            <i class="pi pi-info-circle" aria-hidden="true"></i>
+            <span class="visually-hidden">Metadata</span>
+          </th>
           <th
             *ngFor="let column of columns; trackBy: trackColumn"
             [pSortableColumn]="column"
@@ -85,29 +93,41 @@
               placeholder="Filter"
             ></p-columnFilter>
           </th>
-          <th class="metadata-column">Metadata</th>
         </tr>
       </ng-template>
 
-      <ng-template pTemplate="body" let-row>
+      <ng-template pTemplate="body" let-row let-rowIndex="rowIndex">
         <tr>
-          <td *ngFor="let column of columns; trackBy: trackColumn">
-            {{ formatValue(row[column]) }}
-          </td>
-          <td class="metadata-column">
+          <td class="details-column action-column">
             <p-button
-              label="Show Metadata"
-              size="small"
+              icon="pi pi-eye"
+              rounded="true"
+              text="true"
+              severity="secondary"
+              styleClass="action-icon-button"
+              (onClick)="viewRecordDetails(row, rowIndex)"
+            ></p-button>
+          </td>
+          <td class="metadata-column action-column">
+            <p-button
+              icon="pi pi-info-circle"
+              rounded="true"
+              text="true"
+              severity="secondary"
+              styleClass="action-icon-button"
               [disabled]="!row['__metadata']"
               (onClick)="openMetadataDialog(row['__metadata'])"
             ></p-button>
+          </td>
+          <td *ngFor="let column of columns; trackBy: trackColumn">
+            {{ formatValue(row[column]) }}
           </td>
         </tr>
       </ng-template>
 
       <ng-template pTemplate="emptymessage">
         <tr>
-          <td [attr.colspan]="(columns.length + 1) || 1">
+          <td [attr.colspan]="(columns.length + 2) || 1">
             No records found
           </td>
         </tr>

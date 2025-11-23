@@ -53,6 +53,29 @@
   }
 }
 
+.action-column {
+  text-align: center;
+  white-space: nowrap;
+  width: 56px;
+}
+
+:host ::ng-deep .action-icon-button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
 .column-options {
   display: flex;
   flex-direction: column;

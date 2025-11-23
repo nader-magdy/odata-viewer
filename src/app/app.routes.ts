@@ -14,6 +14,10 @@ export const routes: Routes = [
     loadComponent: () => import('./components/resource-data/resource-data.component').then(m => m.ResourceDataComponent)
   },
   {
+    path: 'resources/:resourceName/details/:resourceId',
+    loadComponent: () => import('./components/resource-details/resource-details.component').then(m => m.ResourceDetailsComponent)
+  },
+  {
     path: '**',
     redirectTo: ''
   }

@@ -1,0 +1,91 @@
+<div class="resource-details-container">
+  <p-card>
+    <ng-template pTemplate="header">
+      <div class="card-header">
+        <div class="header-info">
+          <h1>{{ resourceName || 'Resource record' }}</h1>
+          <p class="connection-url">{{ connectionUrl }}</p>
+        </div>
+        <div class="header-actions">
+          <p-button
+            label="Back to data"
+            icon="pi pi-arrow-left"
+            severity="secondary"
+            (onClick)="backToResource()"
+          ></p-button>
+        </div>
+      </div>
+    </ng-template>
+
+    <p-message
+      *ngIf="errorMessage"
+      severity="warn"
+      [text]="errorMessage"
+      styleClass="w-full mb-3"
+    ></p-message>
+
+    <div *ngIf="loading" class="loading-container">
+      <p-progressSpinner></p-progressSpinner>
+      <p>Preparing record...</p>
+    </div>
+
+    <ng-container *ngIf="!loading && !errorMessage">
+      <section class="details-section">
+        <div class="section-heading">
+          <h2>Record Fields</h2>
+          <span class="field-count">{{ recordEntries.length }} fields</span>
+        </div>
+
+        <p-table
+          *ngIf="recordEntries.length > 0"
+          [value]="recordEntries"
+          [responsiveLayout]="'scroll'"
+          class="details-table"
+        >
+          <ng-template pTemplate="header">
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+          </ng-template>
+
+          <ng-template pTemplate="body" let-entry>
+            <tr>
+              <td class="field-name">{{ entry.key }}</td>
+              <td>
+                <pre *ngIf="entry.multiline" class="field-value multiline">{{ entry.value }}</pre>
+                <span *ngIf="!entry.multiline" class="field-value">{{ entry.value }}</span>
+              </td>
+            </tr>
+          </ng-template>
+
+          <ng-template pTemplate="emptymessage">
+            <tr>
+              <td colspan="2">
+                No fields available for this record.
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </section>
+
+      <section class="metadata-section">
+        <div class="section-heading">
+          <h2>Metadata</h2>
+        </div>
+
+        <div *ngIf="metadataEntries.length === 0" class="metadata-empty">
+          <p>No metadata available for this record.</p>
+        </div>
+
+        <div *ngIf="metadataEntries.length > 0" class="metadata-entries">
+          <div class="metadata-row" *ngFor="let entry of metadataEntries">
+            <div class="metadata-key">{{ entry.key }}</div>
+            <pre class="metadata-value">{{ entry.value }}</pre>
+          </div>
+        </div>
+      </section>
+    </ng-container>
+  </p-card>
+</div>
+
